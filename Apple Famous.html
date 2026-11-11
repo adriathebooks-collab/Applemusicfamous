@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Apple Famous</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#fff;--card:#f4f4f6;--tx:#1b1b1f;--mut:#6b6b76;--ac:#fa2d48;--bd:#e2e2e8}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){color-scheme:dark;--bg:#111114;--card:#1c1c21;--tx:#f2f2f5;--mut:#9a9aa6;--bd:#2b2b33}}
+:root[data-theme="dark"]{color-scheme:dark;--bg:#111114;--card:#1c1c21;--tx:#f2f2f5;--mut:#9a9aa6;--bd:#2b2b33}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--bd)}
+h1{font-size:20px;margin:0}h1 span{color:var(--ac)}
+.info{font-size:13px;color:var(--mut)}
+button,input,select{font:inherit;color:inherit}
+button{background:var(--ac);color:#fff;border:0;border-radius:8px;padding:8px 14px;cursor:pointer}
+button.g{background:var(--card);color:var(--tx);border:1px solid var(--bd)}
+button:disabled{opacity:.45;cursor:not-allowed}
+input,select{background:var(--card);border:1px solid var(--bd);border-radius:8px;padding:9px 10px;width:100%}
+main{display:grid;grid-template-columns:230px 1fr;gap:20px;padding:20px;max-width:1000px;margin:auto}
+@media(max-width:720px){main{grid-template-columns:1fr}}
+nav{display:flex;flex-direction:column;gap:4px}
+nav button{background:none;color:var(--tx);text-align:left;border-radius:8px}
+nav button.on{background:var(--card);color:var(--ac);font-weight:600}
+@media(max-width:720px){nav{flex-direction:row;overflow-x:auto}nav button{white-space:nowrap}}
+h2{margin:0 0 4px}
+.note{font-size:13px;color:var(--mut);margin-bottom:14px}
+.add{background:var(--card);border-radius:12px;padding:14px;display:grid;gap:8px;margin-bottom:18px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.song{display:flex;gap:12px;align-items:center;padding:8px;border-radius:10px;border-bottom:1px solid var(--bd)}
+.pos{width:26px;text-align:center;font-weight:700;color:var(--mut)}
+.cov{width:52px;height:52px;border-radius:8px;flex:none;background:linear-gradient(135deg,#fa2d48,#7a3cff);object-fit:cover;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
+.meta{flex:1;min-width:0}.meta b,.meta div{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta div{font-size:13px;color:var(--mut)}
+.votes{font-weight:700;min-width:38px;text-align:right}
+.x{background:none;color:var(--mut);padding:4px 8px;font-size:18px}
+.msg{padding:30px;text-align:center;color:var(--mut)}
+dialog{border:1px solid var(--bd);border-radius:14px;background:var(--bg);color:var(--tx)}
+</style>
+</head>
+<body>
+<header>
+  <h1><span>♪</span> Playlist Votes</h1>
+  <div class="info" id="status"></div>
+  <div><button class="g" id="loginBtn"></button></div>
+</header>
+<main>
+  <nav id="nav"></nav>
+  <section>
+    <h2 id="pname"></h2>
+    <div class="note" id="pnote"></div>
+    <div class="add">
+      <b>Adicionar música</b>
+      <div class="row"><input id="t" placeholder="Song title"><input id="a" placeholder="Artist"></div>
+      <div class="row"><input id="c" type="file" accept="image/*"><button id="addBtn">Adicionar</button></div>
+    </div>
+    <div id="list"></div>
+  </section>
+</main>
+<dialog id="dlg">
+  <form method="dialog" style="display:grid;gap:10px;min-width:240px">
+    <b>Entrar</b>
+    <input id="u" placeholder="Seu nome de usuário" maxlength="24">
+    <button id="ok" value="ok">Entrar</button>
+  </form>
+</dialog>
+<script>
+const PL=["Today’s Hits","New Music Friday","A-List Pop","Rap Life","Pop Chill","Chill Mix","Pure Workout","Indie Loop"];
+const NMF="New Music Friday",DAY=864e5,KEY="playlistvotes_v1";
+let S={user:"",songs:[],week:"",counts:{},daily:{}},cur=0;
+try{const r=localStorage.getItem(KEY);if(r)S=Object.assign(S,JSON.parse(r))}catch(e){}
+const $=id=>document.getElementById(id);
+const ymd=d=>d.getFullYear()+"-"+(d.getMonth()+1)+"-"+d.getDate();
+function weekStart(){const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-((d.getDay()-5+7)%7));return d}
+function save(){
+  try{localStorage.setItem(KEY,JSON.stringify(S))}
+  catch(e){alert("Não foi possível salvar (armazenamento cheio ou bloqueado).")}
+}
+function maintain(){
+  const w=ymd(weekStart());
+  if(S.week!==w){S.week=w;S.counts={}}           // reinicia toda sexta-feira
+  const lim=Date.now()-7*DAY;                      // New Music Friday: 7 dias
+  S.songs=S.songs.filter(s=>s.pl!==NMF||s.added>lim);
+  const ids=new Set(S.songs.map(s=>s.id));
+  for(const k in S.counts)if(!ids.has(k))delete S.counts[k];
+  save();
+}
+function used(){const d=S.daily[S.user];return d&&d.date===ymd(new Date())?d.ids:[]}
+function nav(){
+  $("nav").innerHTML="";
+  PL.forEach((p,i)=>{const b=document.createElement("button");b.textContent=p;b.className=i===cur?"on":"";b.onclick=()=>{cur=i;render()};$("nav").appendChild(b)});
+}
+function render(){
+  maintain();nav();
+  const p=PL[cur];
+  $("pname").textContent=p;
+  $("pnote").textContent=p===NMF?"As músicas ficam 7 dias e depois saem automaticamente.":"As músicas ficam até o cantor pedir para retirar.";
+  const next=new Date(weekStart().getTime()+7*DAY);
+  const left=Math.ceil((next-Date.now())/DAY);
+  $("status").textContent=S.user?`Olá, ${S.user} · votos hoje: ${used().length}/10 · semana reinicia na sexta (em ${left} dia${left>1?"s":""})`:"Entre para votar";
+  $("loginBtn").textContent=S.user?"Sair":"Entrar";
+  const songs=S.songs.filter(s=>s.pl===p).sort((a,b)=>(S.counts[b.id]||0)-(S.counts[a.id]||0)||a.added-b.added);
+  const L=$("list");L.innerHTML="";
+  if(!songs.length){L.innerHTML='<div class="msg">Nenhuma música ainda. Adicione a primeira!</div>';return}
+  songs.forEach((s,i)=>{
+    const r=document.createElement("div");r.className="song";
+    const cover=s.cover?`<img class="cov" src="${s.cover}" alt="">`:`<div class="cov">${esc(s.title.slice(0,1).toUpperCase())}</div>`;
+    const did=used().includes(s.id);
+    let extra="";
+    if(p===NMF){const d=Math.max(0,Math.ceil((s.added+7*DAY-Date.now())/DAY));extra=` · sai em ${d} dia${d!==1?"s":""}`}
+    r.innerHTML=`<div class="pos">${i+1}</div>${cover}<div class="meta"><b>${esc(s.title)}</b><div>${esc(s.artist)}${extra}</div></div><div class="votes">${S.counts[s.id]||0}</div>`;
+    const v=document.createElement("button");v.textContent=did?"Votado":"Votar";v.disabled=did;v.onclick=()=>vote(s.id);
+    const x=document.createElement("button");x.className="x";x.title="Remover (pedido do cantor)";x.textContent="×";x.onclick=()=>{if(confirm("Remover esta música a pedido do cantor?")){S.songs=S.songs.filter(q=>q.id!==s.id);delete S.counts[s.id];save();render()}};
+    r.append(v,x);L.appendChild(r);
+  });
+}
+function esc(t){return String(t).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function vote(id){
+  if(!S.user){$("dlg").showModal();return}
+  const u=used();
+  if(u.length>=10){alert("Você já usou seus 10 votos de hoje. Volte amanhã!");return}
+  if(u.includes(id))return;
+  S.daily[S.user]={date:ymd(new Date()),ids:[...u,id]};
+  S.counts[id]=(S.counts[id]||0)+1;
+  save();render();
+}
+function resize(file){
+  return new Promise(res=>{
+    const fr=new FileReader();
+    fr.onload=()=>{const im=new Image();im.onload=()=>{
+      const n=300,c=document.createElement("canvas");c.width=c.height=n;
+      const m=Math.min(im.width,im.height),x=(im.width-m)/2,y=(im.height-m)/2;
+      c.getContext("2d").drawImage(im,x,y,m,m,0,0,n,n);res(c.toDataURL("image/jpeg",.8))};
+      im.onerror=()=>res("");im.src=fr.result};
+    fr.onerror=()=>res("");fr.readAsDataURL(file);
+  });
+}
+$("addBtn").onclick=async()=>{
+  const t=$("t").value.trim(),a=$("a").value.trim(),f=$("c").files[0];
+  if(!t||!a){alert("Preencha o título e o cantor.");return}
+  const cover=f?await resize(f):"";
+  S.songs.push({id:"s"+Date.now()+Math.random().toString(36).slice(2,6),pl:PL[cur],title:t,artist:a,cover,added:Date.now()});
+  $("t").value=$("a").value=$("c").value="";
+  save();render();
+};
+$("loginBtn").onclick=()=>{if(S.user){S.user="";save();render()}else $("dlg").showModal()};
+$("dlg").addEventListener("close",()=>{
+  const n=$("u").value.trim();
+  if($("dlg").returnValue==="ok"&&n){S.user=n;save();render()}
+});
+render();
+</script>
+</body>
+</html>
